@@ -3,20 +3,6 @@
 ## - liste des matériels possédés par un client\*
 
 ```SQL
-SELECT * FROM `materiel` WHERE `id_client`=1;
-```
-
-![alt text](images/img1.png "Title")
-
----
-
-## - liste des tickets d'un client\*
-
----
-
-## - liste des interventions liées à un client\*
-
-```SQL
 DELIMITER $$
 
 CREATE PROCEDURE select_materiel_by_id_client(id_cli INT)
@@ -27,7 +13,24 @@ END$$
 DELIMITER ;
 ```
 
+![alt text](images/img1.png "Title")
 ![alt text](images/img2.png "Title")
+
+---
+
+## - liste des tickets d'un client\*
+
+---
+
+## - liste des interventions liées à un client\*
+
+```SQL
+SELECT * FROM intervention
+JOIN ticket on intervention.id_ticket=ticket.id_ticket
+WHERE ticket.id_client=id_cli;
+```
+
+
 
 ---
 
@@ -96,8 +99,7 @@ FROM `intervention`
 JOIN technicien ON intervention.id_technicien=technicien.id_technicien
 WHERE technicien.id_technicien=1;
 ```
-
-![alt text](images/img2.png "Title")
+![alt text](images/img2bis.png "Title")
 
 ---
 
@@ -124,14 +126,13 @@ WHERE ticket.id_ticket=id_tic;
 ## - duree moyenne de résolution d'un ticket\*\*\*\*
 
 ```sql
-SELECT AVG(intervention.tempsPasse) FROM ticket
-JOIN intervention ON ticket.id_ticket=intervention.id_ticket
-JOIN statut ON intervention.id_statut=statut.id_statut
+SELECT AVG(intervention.tempsPasse) FROM ticket as tic
+JOIN intervention ON tic.id_ticket=intervention.id_ticket
 WHERE EXISTS
 	(SELECT intervention.id_intervention FROM intervention
-    WHERE intervention.id_ticket=ticket.id_ticket
+    WHERE intervention.id_ticket=tic.id_ticket
      AND intervention.id_statut=2
-    );
+    )
 ```
 
 ![alt text](images/img4.png "Title")
@@ -141,12 +142,17 @@ WHERE EXISTS
 ## - nombre moyen d'interventions nécessaires à la résolution d'un ticket\*\*\*\*
 
 ```sql
-SELECT AVG(nbinter)
-FROM
-(SELECT COUNT(intervention.id_intervention) as nbinter
- FROM ticket
-JOIN intervention ON ticket.id_ticket=intervention.id_ticket
-GROUP BY ticket.id_ticket) sub;
+SELECT AVG(nbInter) FROM
+(
+    SELECT COUNT(intervention.id_intervention) as nbInter FROM `ticket` tic
+	JOIN intervention on tic.id_ticket=intervention.id_ticket
+     WHERE EXISTS (
+        SELECT intervention.id_intervention FROM intervention
+        JOIN ticket on intervention.id_ticket=tic.id_ticket
+        WHERE intervention.id_statut=2
+    )
+	GROUP BY tic.id_ticket
+) sub
 ```
 
 ![alt text](images/img5.png "Title")
@@ -299,6 +305,18 @@ JOIN piece ON utiliser.id_piece=piece.id_piece;
 
 ![alt text](images/img6.png "Title")
 
+Par client :
+
+```sql
+SELECT client.id_client ,SUM(piece.puAchatHt) as total_pieces_HT FROM `intervention`
+JOIN utiliser ON intervention.id_intervention=utiliser.id_intervention
+JOIN piece ON utiliser.id_piece=piece.id_piece
+JOIN ticket ON intervention.id_ticket=ticket.id_ticket
+JOIN client ON ticket.id_client=client.id_client
+GROUP BY client.id_client  
+ORDER BY client.id_client  ASC;
+```
+
 ---
 
 ## - taux de tickets par marque / par type / par client\*\*\*\*
@@ -322,7 +340,7 @@ SELECT
     marque.nom,
     COUNT(*) as nbTicketsMarque,
     (SELECT COUNT(*) FROM ticket) as totalTickets,
-    ROUND(COUNT(*)*100/(SELECT COUNT(*) FROM ticket),2) as nbTickets
+    ROUND(COUNT(*)*100/(SELECT COUNT(*) FROM ticket),2) as pourcTicketsMarque
 FROM `ticket`
 JOIN materiel ON ticket.id_materiel=materiel.id_materiel
 JOIN marque ON materiel.id_marque=marque.id_marque
@@ -349,6 +367,17 @@ GROUP BY client.id_client;
 
 ---
 
+# Taux de tickets qui ne concernent pas un matériel
+
+```sql
+SELECT 
+COUNT(*) / (SELECT COUNT(*) FROM ticket)
+FROM `ticket`
+WHERE ISNULL(ticket.id_materiel)
+```
+
+---
+
 ## - Quel est le technicien qui a le temps d'intervention moyen le plus faible\*\*\*
 
 -   Tous les techniciens :
@@ -371,4 +400,12 @@ SELECT MIN(tempsMoyen) FROM
  JOIN intervention ON technicien.id_technicien=intervention.id_technicien
  GROUP BY technicien.id_technicien
  ORDER BY tempsMoyen ASC) sub;
+```
+
+```sql
+SELECT MIN(sub.tempsMoyen), sub.id_technicien FROM
+(SELECT AVG(intervention.tempsPasse) as tempsMoyen, technicien.id_technicien, nom, prenom FROM `technicien`
+JOIN intervention ON technicien.id_technicien=intervention.id_technicien
+GROUP BY technicien.id_technicien
+ORDER BY tempsMoyen ASC) sub;
 ```
